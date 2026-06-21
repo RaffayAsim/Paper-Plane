@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import path from "node:path";
 import morgan from "morgan";
 import { config } from "./lib/config.js";
 import { createRateLimiter } from "./lib/rate-limit.js";
@@ -28,7 +29,10 @@ export function createApp() {
     }),
   );
   app.use(morgan("dev"));
-  app.use("/uploads", express.static("uploads"));
+  const uploadsDir = process.env.VERCEL
+    ? path.join("/tmp", "uploads")
+    : "uploads";
+  app.use("/uploads", express.static(uploadsDir));
 
   app.use(`${config.API_PREFIX}/auth`, createRateLimiter(15 * 60 * 1000, 100), authRouter);
   app.use(`${config.API_PREFIX}/billing`, billingRouter);
