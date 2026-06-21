@@ -29,3 +29,6 @@ dist-ssr
 *.zip
 server/yelp-import/*.json
 server/yelp-import/*.josn
+
+# Node binary temp folder
+server/temp_node/
