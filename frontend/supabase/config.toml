@@ -1,0 +1,7 @@
+project_id = "tsyzxcuheguabmcxabsc"
+
+[functions.fetch-leads]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = false

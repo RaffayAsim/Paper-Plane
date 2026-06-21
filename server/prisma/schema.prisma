@@ -1,0 +1,302 @@
+generator client {
+  provider   = "prisma-client-js"
+  output     = "../src/generated/prisma"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleName {
+  super_admin
+}
+
+enum SubscriptionPlan {
+  ai_lead_gen
+}
+
+enum LeadSourceType {
+  google_maps
+  yelp
+  yellow_pages
+  custom
+}
+
+enum LeadCampaignStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  enriched
+  converted
+  archived
+}
+
+enum EmailDirection {
+  incoming
+  outgoing
+}
+
+enum SubscriptionStatus {
+  incomplete
+  trialing
+  active
+  past_due
+  canceled
+  unpaid
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  organizationId      String?
+  email               String               @unique
+  passwordHash        String
+  displayName         String
+  phoneNumber         String               @default("")
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  roles               UserRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  squareCustomer      SquareCustomer?
+  subscriptions       Subscription[]
+  sentEmails          EmailMessage[]       @relation("SentByUser")
+  createdCampaigns    LeadCampaign[]       @relation("LeadCampaignCreatedBy")
+  voiceCampaigns      VoiceCampaign[]      @relation("VoiceCampaignCreatedBy")
+  auditLogs           AuditLog[]           @relation("AuditActor")
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  name      RoleName   @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  users     UserRole[]
+}
+
+model UserRole {
+  id        String    @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SquareCustomer {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  squareCustomerId   String   @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                    String              @id @default(cuid())
+  userId                String
+  squareCustomerId      String?
+  squareSubscriptionId  String?             @unique
+  squarePlanId          String?
+  status                SubscriptionStatus
+  planName              SubscriptionPlan
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean             @default(false)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LeadCampaign {
+  id                  String              @id @default(cuid())
+  organizationId      String?
+  source              LeadSourceType
+  businessType        String
+  location            String
+  leadCount           Int
+  status              LeadCampaignStatus  @default(pending)
+  externalRequestUrl  String?
+  externalResponse    Json?
+  errorMessage        String?
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  createdBy           User?               @relation("LeadCampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  leads               Lead[]
+}
+
+model Lead {
+  id                String          @id @default(cuid())
+  organizationId    String?
+  campaignId        String?
+  source            LeadSourceType
+  name              String
+  business          String
+  email             String?
+  phone             String?
+  website           String?
+  industry          String?
+  location          String?
+  categories        Json?
+  reviewsCount      Int?
+  address           String?
+  city              String?
+  state             String?
+  status            LeadStatus      @default(new)
+  outreachEnabled   Boolean         @default(false)
+  interestScore     Int?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  campaign          LeadCampaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  voiceContacts     VoiceCampaignContact[]
+
+  @@index([source, status])
+}
+
+model VoiceCampaign {
+  id                String                 @id @default(cuid())
+  organizationId    String?
+  createdById       String?
+  source            LeadSourceType
+  name              String
+  assistantId       String
+  assistantName     String?
+  phoneNumberId     String
+  phoneNumberLabel  String?
+  objective         String
+  leadCount         Int
+  status            LeadCampaignStatus     @default(pending)
+  externalResponse  Json?
+  errorMessage      String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  createdBy         User?                  @relation("VoiceCampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  contacts          VoiceCampaignContact[]
+}
+
+model VoiceCampaignContact {
+  id               String         @id @default(cuid())
+  campaignId       String
+  leadId           String?
+  name             String
+  business         String
+  phone            String
+  email            String?
+  callStatus       String         @default("queued")
+  vapiCallId       String?        @unique
+  endedReason      String?
+  outcomeSummary   String?
+  transcript       String?
+  recordingUrl     String?
+  meetingBooked    Boolean        @default(false)
+  meetingBookedAt  DateTime?
+  interestScore    Int?
+  needsHumanReview Boolean        @default(false)
+  humanReviewReason String?
+  reviewHandledAt  DateTime?
+  costUsd          Float?
+  startedAt        DateTime?
+  endedAt          DateTime?
+  lastSyncedAt     DateTime?
+  rawPayload       Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  campaign         VoiceCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead             Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, callStatus])
+}
+
+model EmailThread {
+  id              String         @id @default(cuid())
+  organizationId  String?
+  subject         String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  messages        EmailMessage[]
+}
+
+model EmailMessage {
+  id                 String          @id @default(cuid())
+  organizationId     String?
+  threadId           String?
+  sentByUserId       String?
+  subject            String
+  body               String
+  fromEmail          String
+  toEmail            String
+  direction          EmailDirection
+  isRead             Boolean         @default(false)
+  providerMessageId  String?         @unique
+  inReplyTo          String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  thread             EmailThread?    @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  sentByUser         User?           @relation("SentByUser", fields: [sentByUserId], references: [id], onDelete: SetNull)
+}
+
+model InboundMailboxSync {
+  id             String    @id @default(cuid())
+  organizationId String?
+  mailbox        String
+  lastUid        Int?
+  lastRunAt      DateTime?
+  status         String    @default("idle")
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AppSetting {
+  id          String    @id @default(cuid())
+  scope       String    @default("app")
+  key         String    @unique
+  value       Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model AuditLog {
+  id             String    @id @default(cuid())
+  organizationId String?
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  actor          User?     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+}
